@@ -41,7 +41,7 @@ async fn main() {
         let mut prev_ips: std::collections::HashSet<String> = std::collections::HashSet::new();
         loop {
             tokio::time::sleep(std::time::Duration::from_secs(10)).await;
-            let output = match std::process::Command::new("w").arg("-h").output() {
+            let output = match std::process::Command::new("w").arg("-h -i").output() {
                 Ok(o) => String::from_utf8_lossy(&o.stdout).to_string(),
                 Err(_) => continue,
             };
