@@ -1,14 +1,10 @@
-use std::collections::BTreeSet;
 use std::env;
-use std::time::Duration;
 
 use log::info;
 use sysinfo::System;
 use teloxide::macros::BotCommands;
 use teloxide::types::ChatId;
 use teloxide::{prelude::*, RequestError};
-use tokio::process::Command as Shell;
-use tokio::time::interval;
 
 #[derive(BotCommands, Clone)]
 #[command(rename_rule = "lowercase")]
@@ -20,7 +16,7 @@ enum Command {
 #[tokio::main]
 async fn main() {
     pretty_env_logger::init();
-    info!("Starting impoalert-rs bot...");
+    info!("Starting impoalert");
 
     let token = env::var("TELOXIDE_TOKEN").expect("TELOXIDE_TOKEN must be set");
     let chat_id: i64 = env::var("CHAT_ID")
@@ -29,12 +25,6 @@ async fn main() {
         .expect("CHAT_ID must be a valid integer");
 
     let bot = Bot::new(token);
-    let alerts_chat_id = ChatId(chat_id);
-
-    let monitor_bot = bot.clone();
-    tokio::spawn(async move {
-        monitor_loop(monitor_bot, alerts_chat_id).await;
-    });
 
     let handler = Update::filter_message()
         .filter_command::<Command>()
@@ -45,6 +35,42 @@ async fn main() {
         .build()
         .dispatch()
         .await;
+    let chat_id = ChatId(chat_id);
+    let bot_clone = bot.clone();
+    tokio::spawn(async move {
+        let mut prev_ips: std::collections::HashSet<String> = std::collections::HashSet::new();
+        loop {
+            tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+            let output = match std::process::Command::new("w").arg("-h").output() {
+                Ok(o) => String::from_utf8_lossy(&o.stdout).to_string(),
+                Err(_) => continue,
+            };
+            let current_ips: std::collections::HashSet<String> = output
+                .lines()
+                .filter_map(|line| {
+                    let parts: Vec<&str> = line.split_whitespace().collect();
+                    if parts.len() >= 3 && parts[2] != "-" {
+                        Some(parts[2].to_string())
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            let new_ips: Vec<String> = current_ips.difference(&prev_ips).cloned().collect();
+            if !new_ips.is_empty() {
+                let full_w = String::from_utf8_lossy(
+                    &std::process::Command::new("w").output().unwrap().stdout,
+                );
+                for ip in new_ips {
+                    let msg = format!(
+                        "🚨 SEX ALERT!!1!🚨\nБЛЯЯ ВЗЛОМ С IP: {ip}\ninfo: ```\n{full_w}\n```"
+                    );
+                    let _ = bot_clone.send_message(chat_id, msg).await;
+                }
+            }
+            prev_ips = current_ips;
+        }
+    });
 }
 
 async fn handle_command(bot: Bot, msg: Message, cmd: Command) -> Result<(), RequestError> {
@@ -57,95 +83,6 @@ async fn handle_command(bot: Bot, msg: Message, cmd: Command) -> Result<(), Requ
         }
     }
     Ok(())
-}
-
-async fn monitor_loop(bot: Bot, chat_id: ChatId) {
-    let mut sys = System::new_all();
-    let mut tick = interval(Duration::from_secs(15));
-
-    loop {
-        tick.tick().await;
-        sys.refresh_all();
-
-        let cpu_usage = global_cpu_percent(&mut sys);
-        let mem_percent = memory_percent(&sys);
-
-        let mut alerts = Vec::new();
-
-        if mem_percent > 80.0 || cpu_usage > 90.0 {
-            let what = if mem_percent > 80.0 && cpu_usage > 90.0 {
-                "CPU & Memory"
-            } else if mem_percent > 80.0 {
-                "Memory"
-            } else {
-                "CPU"
-            };
-            alerts.push(format!(
-                "🚨 SEX ALERT!!1!🚨\n{what} is fucking up.\nCPU: {cpu_usage:.1}% | MEM: {mem_percent:.1}%"
-            ));
-        }
-
-        let ips = get_active_ips().await;
-        if !ips.is_empty() {
-            alerts.push(format!(
-                "🚨 SEX ALERT!!1!🚨\nБЛЯЯ ВЗЛОМ С IP:\n{}",
-                ips.join("\n")
-            ));
-        }
-
-        for alert in &alerts {
-            if let Err(e) = bot.send_message(chat_id, alert).await {
-                log::warn!("Failed to send alert: {e}");
-            }
-        }
-    }
-}
-
-async fn get_active_ips() -> Vec<String> {
-    let mut ips = BTreeSet::new();
-
-    // parse `w` for logged-in user sessions
-    if let Ok(out) = Shell::new("w")
-        .arg("-h")
-        .arg("-i")
-        .output()
-        .await
-    {
-        let stdout = String::from_utf8_lossy(&out.stdout);
-        for line in stdout.lines() {
-            let parts: Vec<&str> = line.split_whitespace().collect();
-            // w -h -i output: USER TTY FROM LOGIN@ IDLE JCPU PCPU WHAT
-            if parts.len() >= 3 {
-                let from = parts[2];
-                if from != "-" && from != ":" {
-                    ips.insert(from.to_string());
-                }
-            }
-        }
-    }
-
-    // parse `ss` for established remote connections
-    if let Ok(out) = Shell::new("ss")
-        .args(["-tun", "state", "established"])
-        .output()
-        .await
-    {
-        let stdout = String::from_utf8_lossy(&out.stdout);
-        for line in stdout.lines().skip(1) {
-            // skip header: Netid State Recv-Q Send-Q Local Address:Port Peer Address:Port
-            let parts: Vec<&str> = line.split_whitespace().collect();
-            if parts.len() >= 6 {
-                let peer = parts[5];
-                if let Some(ip) = peer.split(':').next() {
-                    if ip != "::1" && ip != "127.0.0.1" {
-                        ips.insert(ip.to_string());
-                    }
-                }
-            }
-        }
-    }
-
-    ips.into_iter().collect()
 }
 
 fn global_cpu_percent(sys: &mut System) -> f64 {
