@@ -57,7 +57,7 @@ async fn main() {
                 let full_w = String::from_utf8_lossy(&w_output.stdout).to_string();
                 for ip in new_ips {
                     let msg = format!(
-                        "🚨 SEX ALERT!!1!🚨\nБЛЯЯ ВЗЛОМ С IP: {ip}\ninfo: ```\n{full_w}\n```"
+                        "🚨 SEX ALERT!!1!🚨\nБЛЯЯ ВЗЛОМ С IP: {ip}\ninfo:\n{full_w}"
                     );
                     let _ = bot_clone.send_message(chat_id, msg).await;
                 }
