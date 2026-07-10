@@ -7,7 +7,7 @@ use sysinfo::System;
 use teloxide::macros::BotCommands;
 use teloxide::types::ChatId;
 use teloxide::{prelude::*, RequestError};
-use tokio::process::Command;
+use tokio::process::Command as Shell;
 use tokio::time::interval;
 
 #[derive(BotCommands, Clone)]
@@ -105,7 +105,7 @@ async fn get_active_ips() -> Vec<String> {
     let mut ips = BTreeSet::new();
 
     // parse `w` for logged-in user sessions
-    if let Ok(out) = Command::new("w")
+    if let Ok(out) = Shell::new("w")
         .arg("-h")
         .arg("-i")
         .output()
@@ -125,7 +125,7 @@ async fn get_active_ips() -> Vec<String> {
     }
 
     // parse `ss` for established remote connections
-    if let Ok(out) = Command::new("ss")
+    if let Ok(out) = Shell::new("ss")
         .args(["-tun", "state", "established"])
         .output()
         .await
@@ -173,7 +173,7 @@ fn swap_percent(sys: &System) -> f64 {
 }
 
 async fn format_stats(sys: &mut System) -> String {
-    let la = sys.load_average();
+    let la = System::load_average();
     let cpu_usage = global_cpu_percent(sys);
     let cpu_count = sys.cpus().len();
     let mem_used = sys.used_memory() / 1024 / 1024;
