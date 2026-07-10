@@ -44,8 +44,8 @@ async fn main() {
                 .lines()
                 .filter_map(|line| {
                     let parts: Vec<&str> = line.split_whitespace().collect();
-                    if parts.len() >= 3 && parts[2] != "-" {
-                        Some(parts[2].to_string())
+                    if parts.len() >= 2 && parts[1] != "-" {
+                        Some(parts[1].to_string())
                     } else {
                         None
                     }
