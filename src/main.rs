@@ -30,18 +30,13 @@ async fn main() {
         .filter_command::<Command>()
         .endpoint(handle_command);
 
-    Dispatcher::builder(bot, handler)
-        .enable_ctrlc_handler()
-        .build()
-        .dispatch()
-        .await;
     let chat_id = ChatId(chat_id);
     let bot_clone = bot.clone();
     tokio::spawn(async move {
         let mut prev_ips: std::collections::HashSet<String> = std::collections::HashSet::new();
         loop {
             tokio::time::sleep(std::time::Duration::from_secs(10)).await;
-            let output = match std::process::Command::new("w").arg("-h -i").output() {
+            let output = match std::process::Command::new("w").args(["-h", "-i"]).output() {
                 Ok(o) => String::from_utf8_lossy(&o.stdout).to_string(),
                 Err(_) => continue,
             };
@@ -58,9 +53,8 @@ async fn main() {
                 .collect();
             let new_ips: Vec<String> = current_ips.difference(&prev_ips).cloned().collect();
             if !new_ips.is_empty() {
-                let full_w = String::from_utf8_lossy(
-                    &std::process::Command::new("w").output().unwrap().stdout,
-                );
+                let w_output = std::process::Command::new("w").output().unwrap();
+                let full_w = String::from_utf8_lossy(&w_output.stdout).to_string();
                 for ip in new_ips {
                     let msg = format!(
                         "🚨 SEX ALERT!!1!🚨\nБЛЯЯ ВЗЛОМ С IP: {ip}\ninfo: ```\n{full_w}\n```"
@@ -71,6 +65,12 @@ async fn main() {
             prev_ips = current_ips;
         }
     });
+
+    Dispatcher::builder(bot, handler)
+        .enable_ctrlc_handler()
+        .build()
+        .dispatch()
+        .await;
 }
 
 async fn handle_command(bot: Bot, msg: Message, cmd: Command) -> Result<(), RequestError> {
