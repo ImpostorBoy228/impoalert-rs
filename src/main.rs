@@ -150,12 +150,5 @@ async fn format_stats(sys: &mut System) -> String {
         ));
     }
 
-    // add active sessions to stats
-    let ips = get_active_ips().await;
-    if !ips.is_empty() {
-        out.push_str("\n\n👥 Active Connections:\n");
-        out.push_str(&ips.join("\n"));
-    }
-
     out
 }
